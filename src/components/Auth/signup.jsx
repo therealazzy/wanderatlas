@@ -47,7 +47,7 @@ const Signup = () => {
   return (
     <>
     <Header/>
-    <div className='min-h-screen h-14 bg-linear-65 from-orange-400 to-purple-200 to-95% flex items-center justify-center'>
+    <div className='min-h-[calc(100vh-56px)] h-14 bg-linear-65 from-orange-400 to-purple-200 to-95% flex items-center justify-center'>
       <form onSubmit={handleSignup} className='max-w-md m-auto pt-24'>
         <h1 className='text-5xl font-bold text-gray-900 mb-4'>Sign up</h1>
         <p className='text-xl text-gray-600'>

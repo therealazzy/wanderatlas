@@ -46,7 +46,7 @@ const Login = () => {
 
   return (<>
     <Header />
-    <div className='min-h-screen h-14 bg-linear-65 from-green-500 to-yellow-200 to-95% flex items-center justify-center'>
+    <div className='min-h-[calc(100vh-56px)] h-14 bg-linear-65 from-green-500 to-yellow-200 to-95% flex items-center justify-center'>
       <form onSubmit={handleLogin} className='max-w-md m-auto pt-24'>
         <h1 className='text-5xl font-bold text-gray-900 mb-4'>Log in</h1>
         <p className='text-xl text-gray-600'>
