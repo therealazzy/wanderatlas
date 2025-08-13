@@ -1,112 +1,98 @@
-import React, { useEffect } from "react";
-import { UserAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import Header from "./ui/header";
-import { useUserStore } from "../stores/useUserStore";
+import React, { useEffect } from 'react';
+import Header from './ui/header';
+import { UserAuth } from '../context/AuthContext';
+import { useUserStore } from '../stores/useUserStore';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 const Profile = () => {
-  const { session, signOut } = UserAuth();
-  const navigate = useNavigate();
-  const { achievements, userStats, loading, fetchUserData } = useUserStore();
+	const { session, signOut } = UserAuth();
+	const { achievements, userStats, loading, fetchUserData, refreshUserStats } = useUserStore();
 
-  // Get username from session metadata
-  const username = session?.user?.user_metadata?.username || session?.user?.email?.split('@')[0] || "Traveler";
-  const profileImage = session?.user?.user_metadata?.avatar_url || null;
-  const initials = username
-    ?.split(" ")
-    ?.map((word) => word[0])
-    ?.join("")
-    ?.toUpperCase();
+	const username = session?.user?.user_metadata?.username || session?.user?.user_metadata?.full_name || session?.user?.email?.split('@')[0] || 'Explorer';
+	const avatarUrl = session?.user?.user_metadata?.avatar_url || null;
+	const initials = (username || 'E')
+		.split(' ')
+		.map(word => word[0])
+		.join('')
+		.slice(0, 2)
+		.toUpperCase();
 
-  // Fetch user data when component mounts
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchUserData(session.user.id);
-    }
-  }, [session?.user?.id, fetchUserData]);
+	useEffect(() => {
+		if (!session?.user?.id) return;
+		fetchUserData(session.user.id).then(() => {
+			// After we have achievements, recompute stats to ensure counts are current
+			refreshUserStats(session.user.id);
+		});
+	}, [session?.user?.id, fetchUserData, refreshUserStats]);
 
-  const handleSignout = async (e) => {
-    e.preventDefault();
-    try {
-      await signOut();
-      navigate("/");
-    } catch (error) {
-      console.error(error);
-    }
-  };
+	const handleSignOut = async () => {
+		try { await signOut(); } catch (e) { console.error(e); }
+	};
 
-  return (
-    <>
-      <Header />
-      <div className="min-h-[calc(100vh-56px)] bg-linear-65 from-pink-400 to-purple-900 to-95%">
-        <div className="w-full max-w-4xl mx-auto px-4 py-8">
-          {/* Profile Header */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <Avatar className="h-20 w-20">
-                {profileImage && <AvatarImage src={profileImage} alt={initials} />}
-                <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
-              </Avatar>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome, {username}!</h1>
-            <p className="text-gray-200">{session?.user?.email}</p>
-          </div>
+	return (
+		<>
+			<Header />
+			<div className="w-full min-h-[calc(100vh-56px)] bg-linear-65 from-pink-400 to-purple-900 to-95%">
+				<div className="max-w-4xl mx-auto px-4 py-10 text-white">
+					{/* Profile Header */}
+					<div className="text-center mb-8">
+						<div className="flex justify-center mb-4">
+							<Avatar className="h-20 w-20">
+								{avatarUrl && <AvatarImage src={avatarUrl} alt={initials} />}
+								<AvatarFallback className="text-2xl bg-white/10 border border-white/20">{initials}</AvatarFallback>
+							</Avatar>
+						</div>
+						<h1 className="text-3xl font-bold mb-1">Welcome, {username}!</h1>
+						<p className="opacity-80">{session?.user?.email}</p>
+					</div>
 
-          {/* Stats Section */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Countries Visited</h3>
-              <p className="text-3xl font-bold text-yellow-300">{userStats?.countries_visited || 0}</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Total Points</h3>
-              <p className="text-3xl font-bold text-green-300">{achievements?.reduce((total, ua) => total + (ua.achievement?.points || 0), 0) || 0}</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-              <h3 className="text-lg font-semibold text-white mb-2">Achievements</h3>
-              <p className="text-3xl font-bold text-blue-300">{achievements?.length || 0}</p>
-            </div>
-          </div>
+					{/* Stats */}
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+						<div className="p-4 rounded-lg bg-white/10 backdrop-blur-sm">
+							<p className="text-sm opacity-80">Countries Visited</p>
+							<p className="text-2xl font-semibold">{userStats?.countries_visited ?? 0}</p>
+						</div>
+						<div className="p-4 rounded-lg bg-white/10 backdrop-blur-sm">
+							<p className="text-sm opacity-80">Total Memories</p>
+							<p className="text-2xl font-semibold">{userStats?.total_memories ?? 0}</p>
+						</div>
+						<div className="p-4 rounded-lg bg-white/10 backdrop-blur-sm">
+							<p className="text-sm opacity-80">Total Points</p>
+							<p className="text-2xl font-semibold">{userStats?.total_points ?? 0}</p>
+						</div>
+					</div>
 
-          {/* Achievements Section */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-white mb-4 text-center">Recent Achievements</h2>
-            {loading ? (
-              <p className="text-center text-gray-300">Loading achievements...</p>
-            ) : achievements && achievements.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {achievements.slice(0, 6).map((userAchievement) => (
-                  <div key={userAchievement.id} className="bg-white/20 rounded-lg p-4 text-center">
-                    <div className="text-4xl mb-2">{userAchievement.achievement?.icon}</div>
-                    <h3 className="font-semibold text-white mb-1">{userAchievement.achievement?.name}</h3>
-                    <p className="text-sm text-gray-200 mb-2">{userAchievement.achievement?.description}</p>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-yellow-300">+{userAchievement.achievement?.points} pts</span>
-                      <span className="text-gray-300">{userAchievement.achievement?.category}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-gray-300">No achievements yet. Start traveling to earn some!</p>
-            )}
-          </div>
+					{/* Achievements */}
+					<div className="p-4 rounded-lg bg-white/10 backdrop-blur-sm">
+						<h2 className="text-xl font-semibold mb-3">Achievements</h2>
+						{loading ? (
+							<p>Loading...</p>
+						) : (
+							<div className="space-y-2">
+								{(achievements || []).length === 0 ? (
+									<p className="opacity-80">No achievements yet.</p>
+								) : (
+									achievements.map((ua) => (
+										<div key={ua.id} className="flex items-center justify-between p-3 rounded-md bg-white/5 border border-white/10">
+											<div>
+												<p className="font-medium">{ua.achievement?.name}</p>
+												<p className="text-xs opacity-70">{ua.achievement?.description}</p>
+											</div>
+											<span className="text-sm">+{ua.achievement?.points || 0} pts</span>
+										</div>
+									))
+								)}
+							</div>
+						)}
+					</div>
 
-          {/* Sign Out Button */}
-          <div className="text-center">
-            <Button
-              onClick={handleSignout}
-              className="hover:cursor-pointer px-6 py-3 bg-red-600 hover:bg-red-700"
-            >
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+					<div className="mt-8 text-center">
+						<button onClick={handleSignOut} className="px-6 py-3 rounded-md bg-white/10 hover:bg-white/20 transition">Sign out</button>
+					</div>
+				</div>
+			</div>
+		</>
+	);
 };
 
 export default Profile;

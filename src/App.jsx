@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useCountryStore } from './stores/useCountryStore'
 import { useNavigate } from "react-router-dom"
 import { UserAuth } from './context/AuthContext'
-import Globe from './components/Globe'
+// import MapView from './components/MapView'
 import { ChevronDown, Mouse } from 'lucide-react'
 
 function App() {
@@ -16,13 +16,12 @@ function App() {
     fetchCountries();
   }, [fetchCountries])
 
-  // Handle scroll to hide scroll hint when user reaches globe
+  
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
       const windowHeight = window.innerHeight;
       
-      // Hide scroll hint when user scrolls past the first section
       if (scrollPosition > windowHeight * 0.5) {
         setShowScrollHint(false);
       } else {
@@ -89,17 +88,12 @@ function App() {
         )}
       </div>
 
-      {/* Globe Section */}
-      <div className="min-h-screen bg-gradient-to-b from-blue-600 to-purple-900">
-        <div className="text-center pt-16 pb-8">
-          <h2 className="text-4xl font-bold text-white mb-4">
-            Explore the World
-          </h2>
-          <p className="text-xl text-gray-200 mb-8">
-            Click on countries to discover and track your travels
-          </p>
+      {/* Placeholder Section where map used to be */}
+      <div className="min-h-screen bg-gradient-to-b from-blue-600 to-purple-900 flex items-center justify-center">
+        <div className="text-center text-white opacity-80">
+          <h2 className="text-3xl font-semibold mb-2">Map coming back soon</h2>
+          <p>We’re rebuilding the map experience for better performance and reliability.</p>
         </div>
-        <Globe />
       </div>
     </div>
   )
