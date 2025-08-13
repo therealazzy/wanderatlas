@@ -33,8 +33,18 @@ export const AuthContextProvider = ({ children }) => {
 
     //SIGN OUT
     const signOut = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) console.error('Sign-out error:', error);
+        try {
+            console.log('Starting signOut...');
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                console.error('Sign-out error:', error);
+                throw error;
+            }
+            console.log('SignOut completed successfully');
+        } catch (error) {
+            console.error('Sign-out error:', error);
+            throw error;
+        }
     };
 
     //LISTEN TO SESSION CHANGES
@@ -47,14 +57,19 @@ export const AuthContextProvider = ({ children }) => {
         });
 
         // Listen for changes (login, logout, refresh)
-        const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (isMounted) setSession(session);
+        const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+            if (isMounted) {
+                console.log('Auth state change:', event, session ? 'session exists' : 'no session');
+                setSession(session);
+            }
         });
 
         // Cleanup on unmount
         return () => {
             isMounted = false;
-            subscription.subscription.unsubscribe();
+            if (subscription?.subscription) {
+                subscription.subscription.unsubscribe();
+            }
         };
     }, []);
 

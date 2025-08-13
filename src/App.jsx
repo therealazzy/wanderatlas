@@ -1,22 +1,17 @@
 import { Button } from "@/components/ui/button"
-import { useEffect, useState } from 'react'
-import { supabase } from './services/supabaseClient'
+import { useEffect } from 'react'
+import { useCountryStore } from './stores/useCountryStore'
 import { useNavigate } from "react-router-dom"
 import { UserAuth } from './context/AuthContext'
 
 function App() {
-  const [countries, setCountries] = useState([])
   const { session, signOut } = UserAuth();
   const navigate = useNavigate();
+  const { fetchCountries } = useCountryStore();
 
   useEffect(() => {
-    const fetchCountries = async () => {
-      const{ data, error } = await supabase.from('countries').select()
-      if(error) console.log(error)
-      else console.log('success!!')
-    }
-    fetchCountries()
-  },[])
+    fetchCountries();
+  }, [fetchCountries])
 
   const handleSignOut = async () => {
     try {
