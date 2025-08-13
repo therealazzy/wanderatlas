@@ -7,8 +7,10 @@ import Header from '../ui/header';
 
 const Signup = () => {
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPass] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
+  const [usernameTouched, setUsernameTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -17,12 +19,15 @@ const Signup = () => {
   const navigate = useNavigate()
 
   const emailIsValid = /\S+@\S+\.\S+/.test(email)
+  const usernameIsValid = username.length >= 3 && username.length <= 20 && /^[a-zA-Z0-9_]+$/.test(username)
   const passwordIsValid = password.length >= 6
 
   const isButtonDisabled =
     !email ||
+    !username ||
     !password ||
     !emailIsValid ||
+    !usernameIsValid ||
     !passwordIsValid ||
     loading
 
@@ -31,7 +36,7 @@ const Signup = () => {
     setLoading(true)
     setError('')
     try {
-      const result = await signUp({email, password})
+      const result = await signUp({email, username, password})
       if(result.success){
         navigate('/profile')
       } else if (result.error) {
@@ -69,6 +74,22 @@ const Signup = () => {
               />
               {!emailIsValid && emailTouched && (
                 <p className='text-red-500 text-sm mt-1 sm:mt-0 sm:ml-2'>Please enter a valid email</p>
+              )}
+            </div>
+
+            <div className='flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4'>
+              <input
+                onChange={(e) => setUsername(e.target.value)}
+                onBlur={() => setUsernameTouched(true)}
+                value={username}
+                placeholder='Username'
+                className='p-4 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                type='text'
+              />
+              {!usernameIsValid && usernameTouched && (
+                <p className='text-red-500 text-sm mt-1 sm:mt-0 sm:ml-2'>
+                  Username must be 3-20 characters, letters, numbers, and underscores only
+                </p>
               )}
             </div>
 
