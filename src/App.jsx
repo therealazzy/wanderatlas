@@ -2,10 +2,11 @@ import { Button } from "@/components/ui/button"
 import { useEffect, useState } from 'react'
 import { supabase } from './services/supabaseClient'
 import { useNavigate } from "react-router-dom"
+import { UserAuth } from './context/AuthContext'
 
 function App() {
   const [countries, setCountries] = useState([])
-
+  const { session, signOut } = UserAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,6 +17,16 @@ function App() {
     }
     fetchCountries()
   },[])
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen h-14 bg-linear-65 from-cyan-300 to-blue-600 flex items-center justify-center">
       <div className="text-center">
@@ -26,12 +37,25 @@ function App() {
           Track your travels, collect memories
         </p>
         <div className="mt-8 space-x-4">
-          <Button onClick={() => navigate('/login')}>
-            Log in
-          </Button>
-          <Button onClick={() => navigate('/signup')}>
-            Sign up
-          </Button>
+          {session ? (
+            <>
+              <Button onClick={() => navigate('/profile')}>
+                Profile
+              </Button>
+              <Button onClick={handleSignOut}>
+                Sign Out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => navigate('/login')}>
+                Log in
+              </Button>
+              <Button onClick={() => navigate('/signup')}>
+                Sign up
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
