@@ -20,13 +20,12 @@ const Profile = () => {
 	useEffect(() => {
 		if (!session?.user?.id) return;
 		fetchUserData(session.user.id).then(() => {
-			// After we have achievements, recompute stats to ensure counts are current
 			refreshUserStats(session.user.id);
 		});
 	}, [session?.user?.id, fetchUserData, refreshUserStats]);
 
 	const handleSignOut = async () => {
-		try { await signOut(); } catch (e) { console.error(e); }
+		try { await signOut(); } catch (e) {}
 	};
 
 	return (

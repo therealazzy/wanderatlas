@@ -52,7 +52,6 @@ const MapPage = () => {
         })
       };
     } catch (e) {
-      console.warn("Failed to tag visited flags:", e);
       return fc;
     }
   };
@@ -112,12 +111,7 @@ const MapPage = () => {
     const map = mapRef.current;
     if (!map || !worldDataRef.current || !session?.user?.id) return;
 
-    const { data, error } = await getMemoryCountsByCountry(session.user.id);
-    if (error) {
-      console.warn('Failed to fetch memory counts:', error);
-      return;
-    }
-
+    const { data } = await getMemoryCountsByCountry(session.user.id);
     if (!countries || countries.length === 0) return;
 
     const idToCode = new Map(countries.map((c) => [c.id, (c.code || '').toUpperCase()]));
@@ -247,7 +241,6 @@ const MapPage = () => {
         const baseData = await res.json();
         worldDataRef.current = baseData;
       } catch (e) {
-        console.error("Failed to fetch world GeoJSON", e);
         return;
       }
 
@@ -260,9 +253,7 @@ const MapPage = () => {
       if (!currentMap.getSource || !currentMap.getSource("countries")) {
         try {
           currentMap.addSource("countries", { type: "geojson", data: tagged });
-        } catch (e) {
-          // Source might already exist in a parallel init; continue
-        }
+        } catch (e) {}
       } else {
         try {
           currentMap.getSource("countries")?.setData(tagged);
@@ -386,9 +377,7 @@ const MapPage = () => {
       if (src) {
         src.setData(tagged);
       }
-    } catch (e) {
-      console.error("Failed to retag source on visited change", e);
-    }
+    } catch (e) {}
   }, [visitedCodes, visitedNames]);
 
   useEffect(() => {
@@ -399,7 +388,7 @@ const MapPage = () => {
   const handleSubmitMemory = async ({ country, title, date, notes }) => {
     try {
       if (!session?.user?.id) {
-        alert("Please log in to save a memory.");
+        showNotice("Please log in to save a memory.");
         return;
       }
 
@@ -427,9 +416,7 @@ const MapPage = () => {
 
       try {
         await markVisited(session.user.id, countryRow.id, date || null);
-      } catch (e) {
-        console.warn('Failed to mark visited in DB:', e);
-      }
+      } catch (e) {}
       setVisitedCodes((prev) => (prev?.includes(countryRow.code) ? prev : [...prev, countryRow.code]));
       setVisitedNames((prev) => (prev?.includes(countryRow.name) ? prev : [...prev, countryRow.name]));
 
@@ -441,7 +428,6 @@ const MapPage = () => {
         setFormSuccess(false);
       }, 1200);
     } catch (err) {
-      console.error("Failed to save memory:", err);
       showNotice("Failed to save memory. Please try again.");
     }
   };

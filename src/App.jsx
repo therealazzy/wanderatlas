@@ -39,9 +39,7 @@ function App() {
     try {
       await signOut();
       navigate('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+    } catch (error) {}
   };
 
   const handleGlobeClick = () => {
@@ -93,7 +91,6 @@ function App() {
             <div className="flex flex-col items-center text-white">
               <Mouse className="w-6 h-6 mb-2" />
               <ChevronDown className="w-5 h-5" />
-              {/*<span className="text-sm mt-2">Scroll to explore</span>*/}
             </div>
           </div>
         )}
