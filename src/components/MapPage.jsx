@@ -4,7 +4,7 @@ import * as turf from "@turf/turf";
 import "maplibre-gl/dist/maplibre-gl.css";
 import MemoryForm from "./MemoryForm";
 import { UserAuth } from "../context/AuthContext";
-import { addMemory } from "../services/memories";
+import { addMemory, getMemoryCountsByCountry } from "../services/memories";
 import { useVisitedStore } from "../stores/useVisitedStore";
 import { useCountryStore } from "../stores/useCountryStore";
 
@@ -26,6 +26,9 @@ const MapPage = () => {
   const [formSuccess, setFormSuccess] = useState(false);
   const [visitedCodes, setVisitedCodes] = useState([]);
   const [visitedNames, setVisitedNames] = useState([]);
+  const [notice, setNotice] = useState("");
+
+  const [markers, setMarkers] = useState([]);
 
   const { session } = UserAuth();
   const { visited, loadVisited, markVisited } = useVisitedStore();
@@ -90,8 +93,67 @@ const MapPage = () => {
     best = countries.find((c) => norm(c.name) === mapped);
     if (best) return best;
 
-    console.warn("Failed to resolve country", { featureName, code3, code2, sample: countries.slice(0,3) });
     return null;
+  };
+
+  const clearMarkers = () => {
+    try { markers.forEach((m) => m.remove()); } catch {}
+    setMarkers([]);
+  };
+
+  const showNotice = (text) => {
+    setNotice(text);
+    setTimeout(() => setNotice(""), 1800);
+  };
+
+  const renderMemoryMarkers = async () => {
+    const map = mapRef.current;
+    if (!map || !worldDataRef.current || !session?.user?.id) return;
+
+    const { data, error } = await getMemoryCountsByCountry(session.user.id);
+    if (error) {
+      console.warn('Failed to fetch memory counts:', error);
+      return;
+    }
+
+    if (!countries || countries.length === 0) return;
+
+    const idToCode = new Map(countries.map((c) => [c.id, (c.code || '').toUpperCase()]));
+    const idToName = new Map(countries.map((c) => [c.id, c.name]));
+
+    clearMarkers();
+    const newMarkers = [];
+
+    for (const row of (data || [])) {
+      const countryId = row.country_id;
+      const count = Number(row.count) || 0;
+      if (!countryId || count <= 0) continue;
+
+      const code = (idToCode.get(countryId) || '').toUpperCase();
+      const dbName = idToName.get(countryId) || '';
+      const normDbName = normalize(dbName);
+
+      const feature = (worldDataRef.current.features || []).find((f) => {
+        const iso3 = (f.id || f.properties?.iso_a3 || '').toString().toUpperCase();
+        const name = f.properties?.name || f.properties?.ADMIN || f.properties?.admin || '';
+        const normName = normalize(name);
+        return (code && iso3 === code) || (normDbName && (normName === normDbName || normName.includes(normDbName) || normDbName.includes(normName)));
+      });
+      if (!feature) continue;
+
+      const point = turf.pointOnFeature(feature).geometry.coordinates;
+      const el = document.createElement('div');
+      el.className = 'memory-marker';
+      el.style.cssText = 'background:#10b981;color:#fff;border-radius:9999px;padding:4px 8px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.3);transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;';
+      el.textContent = String(count);
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat(point)
+        .addTo(map);
+      newMarkers.push(marker);
+    }
+
+    setMarkers(newMarkers);
   };
 
   useEffect(() => {
@@ -129,16 +191,23 @@ const MapPage = () => {
       center: [0, 20],
       zoom: 1.5,
       doubleClickZoom: false,
-      dragRotate: false
+      dragRotate: false,
+      pitchWithRotate: false
     });
 
     mapRef.current = map;
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    // Disable touch rotation gestures
+    if (map.touchZoomRotate && map.touchZoomRotate.disableRotation) {
+      map.touchZoomRotate.disableRotation();
+    }
+
+    // Only show zoom controls; hide compass (bearing control)
+    map.addControl(new maplibregl.NavigationControl({ showZoom: true, showCompass: false }), "top-right");
 
     const setupMap = async () => {
-      const currentMap = mapRef.current;
-      if (!currentMap || sourcesAddedRef.current) return;
+      const initialMap = mapRef.current;
+      if (!initialMap || sourcesAddedRef.current) return;
 
       try {
         const res = await fetch(WORLD_GEOJSON_URL);
@@ -151,46 +220,66 @@ const MapPage = () => {
 
       const tagged = tagVisited(worldDataRef.current, visitedCodes, visitedNames);
 
-      if (!currentMap.getSource("countries")) {
-        currentMap.addSource("countries", { type: "geojson", data: tagged });
+      // Re-read current map after await to ensure it's still mounted
+      const currentMap = mapRef.current;
+      if (!currentMap) return;
+
+      if (!currentMap.getSource || !currentMap.getSource("countries")) {
+        try {
+          currentMap.addSource("countries", { type: "geojson", data: tagged });
+        } catch (e) {
+          // Source might already exist in a parallel init; continue
+        }
+      } else {
+        try {
+          currentMap.getSource("countries")?.setData(tagged);
+        } catch {}
       }
 
-      if (!currentMap.getLayer("countries-nonvisited")) {
-        currentMap.addLayer({
-          id: "countries-nonvisited",
-          type: "fill",
-          source: "countries",
-          paint: { "fill-color": "#9ca3af", "fill-opacity": 0.6 },
-          filter: ["!=", ["get", "_visited"], true]
-        });
+      if (!currentMap.getLayer || !currentMap.getLayer("countries-nonvisited")) {
+        try {
+          currentMap.addLayer({
+            id: "countries-nonvisited",
+            type: "fill",
+            source: "countries",
+            paint: { "fill-color": "#9ca3af", "fill-opacity": 0.6 },
+            filter: ["!=", ["get", "_visited"], true]
+          });
+        } catch {}
       }
 
-      if (!currentMap.getLayer("countries-outline")) {
-        currentMap.addLayer({
-          id: "countries-outline",
-          type: "line",
-          source: "countries",
-          paint: { "line-color": "#111827", "line-width": 0.6, "line-opacity": 0.6 }
-        });
+      if (!currentMap.getLayer || !currentMap.getLayer("countries-outline")) {
+        try {
+          currentMap.addLayer({
+            id: "countries-outline",
+            type: "line",
+            source: "countries",
+            paint: { "line-color": "#111827", "line-width": 0.6, "line-opacity": 0.6 }
+          });
+        } catch {}
       }
 
-      if (!currentMap.getLayer("countries-events")) {
-        currentMap.addLayer({
-          id: "countries-events",
-          type: "fill",
-          source: "countries",
-          paint: { "fill-color": "#000000", "fill-opacity": 0 }
-        });
+      if (!currentMap.getLayer || !currentMap.getLayer("countries-events")) {
+        try {
+          currentMap.addLayer({
+            id: "countries-events",
+            type: "fill",
+            source: "countries",
+            paint: { "fill-color": "#000000", "fill-opacity": 0 }
+          });
+        } catch {}
       }
 
-      if (!currentMap.getLayer("countries-highlight")) {
-        currentMap.addLayer({
-          id: "countries-highlight",
-          type: "fill",
-          source: "countries",
-          paint: { "fill-color": "#ef4444", "fill-opacity": 0.35 },
-          filter: ["==", "name", ""]
-        });
+      if (!currentMap.getLayer || !currentMap.getLayer("countries-highlight")) {
+        try {
+          currentMap.addLayer({
+            id: "countries-highlight",
+            type: "fill",
+            source: "countries",
+            paint: { "fill-color": "#ef4444", "fill-opacity": 0.35 },
+            filter: ["==", "name", ""]
+          });
+        } catch {}
       }
 
       sourcesAddedRef.current = true;
@@ -201,13 +290,13 @@ const MapPage = () => {
           if (!feature) return;
           const name = feature.properties?.name || feature.properties?.ADMIN || feature.properties?.admin || "";
           setHoveredCountryName(name);
-          if (currentMap.getLayer("countries-highlight")) currentMap.setFilter("countries-highlight", ["==", "name", name]);
+          if (currentMap.getLayer && currentMap.getLayer("countries-highlight")) currentMap.setFilter("countries-highlight", ["==", "name", name]);
           currentMap.getCanvas().style.cursor = "pointer";
         });
 
         currentMap.on("mouseleave", "countries-events", () => {
           setHoveredCountryName("");
-          if (currentMap.getLayer("countries-highlight")) currentMap.setFilter("countries-highlight", ["==", "name", ""]);
+          if (currentMap.getLayer && currentMap.getLayer("countries-highlight")) currentMap.setFilter("countries-highlight", ["==", "name", ""]);
           currentMap.getCanvas().style.cursor = "";
         });
 
@@ -219,14 +308,17 @@ const MapPage = () => {
           const code2 = (feature.properties?.iso_a2 || feature.properties?.ISO_A2 || "").toString().toUpperCase();
           const bbox = turf.bbox(feature);
           currentMap.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 50, maxZoom: 5 });
+
+          const resolved = resolveCountryRow(name, code3, code2);
+          if (!resolved) {
+            showNotice(`${name} isn’t available in your countries list`);
+            return;
+          }
+
           setSelectedCountryName(name);
           setSelectedCountryCode3(code3);
           setSelectedCountryCode2(code2);
-
-          // Resolve immediately and cache
-          const resolved = resolveCountryRow(name, code3, code2);
-          setSelectedCountry(resolved || null);
-
+          setSelectedCountry(resolved);
           setShowForm(true);
           setFormSuccess(false);
         });
@@ -234,7 +326,9 @@ const MapPage = () => {
         handlersAddedRef.current = true;
       }
 
-      currentMap.resize();
+      try { currentMap.resize(); } catch {}
+
+      renderMemoryMarkers();
     };
 
     map.on("load", setupMap);
@@ -243,10 +337,11 @@ const MapPage = () => {
       window.removeEventListener("resize", resize);
       handlersAddedRef.current = false;
       sourcesAddedRef.current = false;
+      clearMarkers();
       if (mapRef.current) mapRef.current.remove();
       mapRef.current = null;
     };
-  }, [visitedCodes, visitedNames]);
+  }, [visitedCodes, visitedNames, session?.user?.id, countries]);
 
   useEffect(() => {
     const currentMap = mapRef.current;
@@ -263,6 +358,11 @@ const MapPage = () => {
     }
   }, [visitedCodes, visitedNames]);
 
+  useEffect(() => {
+    renderMemoryMarkers();
+    return () => clearMarkers();
+  }, [session?.user?.id, countries]);
+
   const handleSubmitMemory = async ({ country, title, date, notes }) => {
     try {
       if (!session?.user?.id) {
@@ -272,7 +372,6 @@ const MapPage = () => {
 
       let countryRow = selectedCountry;
       if (!countryRow) {
-        // Countries might not have loaded yet; try resolving now
         if (!countries || countries.length === 0) {
           await fetchCountries?.();
         }
@@ -280,7 +379,7 @@ const MapPage = () => {
       }
 
       if (!countryRow) {
-        alert("Could not resolve selected country. Please try again.");
+        showNotice("Could not resolve selected country. Please try again.");
         return;
       }
 
@@ -301,6 +400,8 @@ const MapPage = () => {
       setVisitedCodes((prev) => (prev?.includes(countryRow.code) ? prev : [...prev, countryRow.code]));
       setVisitedNames((prev) => (prev?.includes(countryRow.name) ? prev : [...prev, countryRow.name]));
 
+      await renderMemoryMarkers();
+
       setFormSuccess(true);
       setTimeout(() => {
         setShowForm(false);
@@ -308,7 +409,7 @@ const MapPage = () => {
       }, 1200);
     } catch (err) {
       console.error("Failed to save memory:", err);
-      alert("Failed to save memory. Please try again.");
+      showNotice("Failed to save memory. Please try again.");
     }
   };
 
@@ -317,6 +418,11 @@ const MapPage = () => {
       <div ref={mapContainerRef} className="absolute inset-0" />
       {hoveredCountryName && !showForm && (
         <div className="absolute left-3 top-3 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
+      )}
+      {notice && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md bg-black/70 text-white text-sm shadow">
+          {notice}
+        </div>
       )}
       {showForm && (
         <MemoryForm countryName={selectedCountryName} onClose={() => setShowForm(false)} onSubmit={handleSubmitMemory} success={formSuccess} />

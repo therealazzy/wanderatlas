@@ -19,4 +19,23 @@ export const addMemory = async ({ userId, countryId, title, date, notes, locatio
     .insert([payload])
     .select();
   return { data, error };
+};
+
+export const getMemoryCountsByCountry = async (userId) => {
+  const { data, error } = await supabase
+    .from('memories')
+    .select('country_id')
+    .eq('user_id', userId);
+
+  if (error) return { data: null, error };
+
+  const counts = {};
+  (data || []).forEach((row) => {
+    const id = row.country_id;
+    if (!id) return;
+    counts[id] = (counts[id] || 0) + 1;
+  });
+
+  const result = Object.entries(counts).map(([country_id, count]) => ({ country_id, count }));
+  return { data: result, error: null };
 }; 
