@@ -14,11 +14,16 @@ const BASE_STYLE_URL = "https://demotiles.maplibre.org/style.json";
 const MapPage = () => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const worldDataRef = useRef(null);
   const sourcesAddedRef = useRef(false);
   const handlersAddedRef = useRef(false);
   const [hoveredCountryName, setHoveredCountryName] = useState("");
   const [selectedCountryName, setSelectedCountryName] = useState("");
+  const [selectedCountryCode3, setSelectedCountryCode3] = useState("");
+  const [selectedCountryCode2, setSelectedCountryCode2] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [formSuccess, setFormSuccess] = useState(false);
   const [visitedCodes, setVisitedCodes] = useState([]);
   const [visitedNames, setVisitedNames] = useState([]);
 
@@ -26,12 +31,74 @@ const MapPage = () => {
   const { visited, loadVisited, markVisited } = useVisitedStore();
   const { countries, fetchCountries } = useCountryStore();
 
+  const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+  const tagVisited = (fc, codes, names) => {
+    try {
+      const codeSet = new Set((codes || []).map((c) => (c || "").toUpperCase()));
+      const normNameSet = new Set((names || []).map((n) => normalize(n)));
+      return {
+        type: "FeatureCollection",
+        features: (fc.features || []).map((f) => {
+          const idCode = (f.id || f.properties?.iso_a3 || "").toString().toUpperCase();
+          const propName = f.properties?.name || f.properties?.ADMIN || f.properties?.admin || "";
+          const normPropName = normalize(propName);
+          const isVisited = codeSet.has(idCode) || normNameSet.has(normPropName) || Array.from(normNameSet).some((n) => normPropName.includes(n) || n.includes(normPropName));
+          return { ...f, properties: { ...f.properties, _visited: !!isVisited } };
+        })
+      };
+    } catch (e) {
+      console.warn("Failed to tag visited flags:", e);
+      return fc;
+    }
+  };
+
+  const resolveCountryRow = (featureName, code3, code2) => {
+    if (!Array.isArray(countries)) return null;
+    const upper = (s) => (s || "").toUpperCase();
+    const norm = normalize;
+
+    if (code2) {
+      const row2 = countries.find((c) => upper(c.code) === upper(code2));
+      if (row2) return row2;
+    }
+    if (code3) {
+      const row3 = countries.find((c) => upper(c.code) === upper(code3));
+      if (row3) return row3;
+    }
+    const nFeature = norm(featureName);
+    let best = countries.find((c) => {
+      const nDb = norm(c.name);
+      return nDb === nFeature || nDb.includes(nFeature) || nFeature.includes(nDb);
+    });
+    if (best) return best;
+
+    const synonyms = new Map([
+      ["unitedstatesofamerica", "unitedstates"],
+      ["russianfederation", "russia"],
+      ["korearepublicof", "southkorea"],
+      ["koreademocraticpeoplesrepublicof", "northkorea"],
+      ["irishrepublic", "ireland"],
+      ["syrianarabrepublic", "syria"],
+      ["moldovarepublicof", "moldova"],
+      ["tanzaniatheunitedrepublicof", "tanzania"],
+      ["boliviaplurinationalstateof", "bolivia"],
+      ["iranislamicrepublicof", "iran"],
+      ["laopeoplesdemocraticrepublic", "laos"],
+      ["myanmarburma", "myanmar"],
+    ]);
+    const mapped = synonyms.get(nFeature) || nFeature;
+    best = countries.find((c) => norm(c.name) === mapped);
+    if (best) return best;
+
+    console.warn("Failed to resolve country", { featureName, code3, code2, sample: countries.slice(0,3) });
+    return null;
+  };
+
   useEffect(() => {
     fetchCountries?.();
     if (session?.user?.id) loadVisited?.(session.user.id);
   }, [session?.user?.id, fetchCountries, loadVisited]);
 
-  // Build lists for visited countries: ISO A3 code and display names
   useEffect(() => {
     if (!Array.isArray(visited) || !Array.isArray(countries)) return;
     const idToCode = new Map(countries.map((c) => [c.id, c.code]));
@@ -40,7 +107,6 @@ const MapPage = () => {
     const names = visited.map((v) => idToName.get(v.country_id)).filter(Boolean);
     setVisitedCodes(codes);
     setVisitedNames(names);
-    console.log("VisitedCodes:", codes, "VisitedNames:", names);
   }, [visited, countries]);
 
   useEffect(() => {
@@ -74,48 +140,31 @@ const MapPage = () => {
       const currentMap = mapRef.current;
       if (!currentMap || sourcesAddedRef.current) return;
 
-      // Fetch GeoJSON
-      let worldData = null;
       try {
         const res = await fetch(WORLD_GEOJSON_URL);
-        worldData = await res.json();
-        const featureCount = Array.isArray(worldData?.features) ? worldData.features.length : 0;
-        console.log("Loaded world GeoJSON features:", featureCount);
+        const baseData = await res.json();
+        worldDataRef.current = baseData;
       } catch (e) {
         console.error("Failed to fetch world GeoJSON", e);
         return;
       }
 
+      const tagged = tagVisited(worldDataRef.current, visitedCodes, visitedNames);
+
       if (!currentMap.getSource("countries")) {
-        currentMap.addSource("countries", { type: "geojson", data: worldData });
+        currentMap.addSource("countries", { type: "geojson", data: tagged });
       }
 
-      const buildNotVisitedFilter = (codes, names) => {
-        const parts = [];
-        if (Array.isArray(codes) && codes.length > 0) parts.push(["!in", "id", ...codes]);
-        if (Array.isArray(names) && names.length > 0) {
-          parts.push(["!in", "name", ...names]);
-          parts.push(["!in", "ADMIN", ...names]);
-          parts.push(["!in", "admin", ...names]);
-        }
-        if (parts.length === 0) return ["all"]; // nothing visited yet → grey all
-        return ["all", ...parts];
-      };
-      const notVisitedFilter = buildNotVisitedFilter(visitedCodes, visitedNames);
-      console.log("Non-visited filter:", JSON.stringify(notVisitedFilter));
-
-      // Non-visited grey overlay (countries not in visited lists)
       if (!currentMap.getLayer("countries-nonvisited")) {
         currentMap.addLayer({
           id: "countries-nonvisited",
           type: "fill",
           source: "countries",
           paint: { "fill-color": "#9ca3af", "fill-opacity": 0.6 },
-          filter: notVisitedFilter
+          filter: ["!=", ["get", "_visited"], true]
         });
       }
 
-      // Thin outlines for all
       if (!currentMap.getLayer("countries-outline")) {
         currentMap.addLayer({
           id: "countries-outline",
@@ -125,7 +174,6 @@ const MapPage = () => {
         });
       }
 
-      // Transparent layer for events across all countries
       if (!currentMap.getLayer("countries-events")) {
         currentMap.addLayer({
           id: "countries-events",
@@ -135,7 +183,6 @@ const MapPage = () => {
         });
       }
 
-      // Highlight layer
       if (!currentMap.getLayer("countries-highlight")) {
         currentMap.addLayer({
           id: "countries-highlight",
@@ -168,10 +215,20 @@ const MapPage = () => {
           const feature = e.features && e.features[0];
           if (!feature) return;
           const name = feature.properties?.name || feature.properties?.ADMIN || feature.properties?.admin || "";
+          const code3 = (feature.id || feature.properties?.iso_a3 || "").toString().toUpperCase();
+          const code2 = (feature.properties?.iso_a2 || feature.properties?.ISO_A2 || "").toString().toUpperCase();
           const bbox = turf.bbox(feature);
           currentMap.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 50, maxZoom: 5 });
           setSelectedCountryName(name);
+          setSelectedCountryCode3(code3);
+          setSelectedCountryCode2(code2);
+
+          // Resolve immediately and cache
+          const resolved = resolveCountryRow(name, code3, code2);
+          setSelectedCountry(resolved || null);
+
           setShowForm(true);
+          setFormSuccess(false);
         });
 
         handlersAddedRef.current = true;
@@ -191,28 +248,18 @@ const MapPage = () => {
     };
   }, [visitedCodes, visitedNames]);
 
-  // Update non-visited overlay filter when visited lists change
   useEffect(() => {
     const currentMap = mapRef.current;
     if (!currentMap) return;
-    const buildNotVisitedFilter = (codes, names) => {
-      const parts = [];
-      if (Array.isArray(codes) && codes.length > 0) parts.push(["!in", "id", ...codes]);
-      if (Array.isArray(names) && names.length > 0) {
-        parts.push(["!in", "name", ...names]);
-        parts.push(["!in", "ADMIN", ...names]);
-        parts.push(["!in", "admin", ...names]);
+    if (!worldDataRef.current) return;
+    try {
+      const tagged = tagVisited(worldDataRef.current, visitedCodes, visitedNames);
+      const src = currentMap.getSource("countries");
+      if (src) {
+        src.setData(tagged);
       }
-      if (parts.length === 0) return ["all"]; 
-      return ["all", ...parts];
-    };
-    const notVisitedFilter = buildNotVisitedFilter(visitedCodes, visitedNames);
-    if (currentMap.getLayer("countries-nonvisited")) {
-      try {
-        currentMap.setFilter("countries-nonvisited", notVisitedFilter);
-      } catch (e) {
-        console.error("Failed to update non-visited filter", e);
-      }
+    } catch (e) {
+      console.error("Failed to retag source on visited change", e);
     }
   }, [visitedCodes, visitedNames]);
 
@@ -222,10 +269,16 @@ const MapPage = () => {
         alert("Please log in to save a memory.");
         return;
       }
-      // resolve country_id and code from countries list by matching name
-      const countryRow = (countries || []).find(
-        (c) => c.name === country || c.admin === country || c.ADMIN === country
-      );
+
+      let countryRow = selectedCountry;
+      if (!countryRow) {
+        // Countries might not have loaded yet; try resolving now
+        if (!countries || countries.length === 0) {
+          await fetchCountries?.();
+        }
+        countryRow = resolveCountryRow(selectedCountryName, selectedCountryCode3, selectedCountryCode2);
+      }
+
       if (!countryRow) {
         alert("Could not resolve selected country. Please try again.");
         return;
@@ -240,18 +293,19 @@ const MapPage = () => {
       });
       if (error) throw error;
 
-      // Optimistically mark visited in DB and overlay
       try {
         await markVisited(session.user.id, countryRow.id, date || null);
       } catch (e) {
         console.warn('Failed to mark visited in DB:', e);
       }
-      // Local optimistic overlay if store update lags or fails
       setVisitedCodes((prev) => (prev?.includes(countryRow.code) ? prev : [...prev, countryRow.code]));
       setVisitedNames((prev) => (prev?.includes(countryRow.name) ? prev : [...prev, countryRow.name]));
 
-      setShowForm(false);
-      alert("Memory saved!");
+      setFormSuccess(true);
+      setTimeout(() => {
+        setShowForm(false);
+        setFormSuccess(false);
+      }, 1200);
     } catch (err) {
       console.error("Failed to save memory:", err);
       alert("Failed to save memory. Please try again.");
@@ -265,7 +319,7 @@ const MapPage = () => {
         <div className="absolute left-3 top-3 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
       )}
       {showForm && (
-        <MemoryForm countryName={selectedCountryName} onClose={() => setShowForm(false)} onSubmit={handleSubmitMemory} />
+        <MemoryForm countryName={selectedCountryName} onClose={() => setShowForm(false)} onSubmit={handleSubmitMemory} success={formSuccess} />
       )}
     </div>
   );
