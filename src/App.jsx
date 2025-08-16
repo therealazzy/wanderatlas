@@ -6,6 +6,7 @@ import { UserAuth } from './context/AuthContext'
 // import MapView from './components/MapView'
 import { ChevronDown, Mouse } from 'lucide-react'
 import Header from './components/ui/header'
+import Globe3D from './components/Globe3D'
 
 function App() {
   const { session, signOut } = UserAuth();
@@ -43,11 +44,19 @@ function App() {
     }
   };
 
+  const handleGlobeClick = () => {
+    if (session) {
+      navigate('/map');
+    } else {
+      navigate('/login');
+    }
+  };
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-linear-65 from-cyan-300 to-blue-600">
       <Header />
-      {/* Hero Section */}
-      <div className="min-h-screen h-14 bg-linear-65 from-cyan-300 to-blue-600 flex items-center justify-center relative">
+      {/* Hero Section (restored) */}
+      <div className="min-h-screen h-14 flex items-center justify-center relative">
         <div className="text-center">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
             🌍 Wanderlog Atlas
@@ -80,21 +89,26 @@ function App() {
 
         {/* Scroll Down Animation */}
         {showScrollHint && (
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+          <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 animate-bounce">
             <div className="flex flex-col items-center text-white">
               <Mouse className="w-6 h-6 mb-2" />
               <ChevronDown className="w-5 h-5" />
-              <span className="text-sm mt-2">Scroll to explore</span>
+              {/*<span className="text-sm mt-2">Scroll to explore</span>*/}
             </div>
           </div>
         )}
       </div>
 
-      {/* Placeholder Section where map used to be */}
-      <div className="min-h-screen bg-gradient-to-b from-blue-600 to-purple-900 flex items-center justify-center">
-        <div className="text-center text-white opacity-80">
-          <h2 className="text-3xl font-semibold mb-2">Map coming back soon</h2>
-          <p>We’re rebuilding the map experience for better performance and reliability.</p>
+      {/* Second Section with clickable 3D globe (no background) */}
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Globe3D onClick={handleGlobeClick} />
+          <p className="mt-6 text-lg md:text-xl text-gray-700">
+            Tap the globe to open your map
+          </p>
+          {!session && (
+            <p className="mt-2 text-sm text-gray-500">You’ll be asked to log in first</p>
+          )}
         </div>
       </div>
     </div>
