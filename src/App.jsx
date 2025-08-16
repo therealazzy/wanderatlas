@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { UserAuth } from './context/AuthContext'
 // import MapView from './components/MapView'
 import { ChevronDown, Mouse } from 'lucide-react'
+import Header from './components/ui/header'
 
 function App() {
   const { session, signOut } = UserAuth();
@@ -44,6 +45,7 @@ function App() {
 
   return (
     <div className="min-h-screen">
+      <Header />
       {/* Hero Section */}
       <div className="min-h-screen h-14 bg-linear-65 from-cyan-300 to-blue-600 flex items-center justify-center relative">
         <div className="text-center">
