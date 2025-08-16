@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import * as turf from "@turf/turf";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -7,6 +7,7 @@ import { UserAuth } from "../context/AuthContext";
 import { addMemory, getMemoryCountsByCountry } from "../services/memories";
 import { useVisitedStore } from "../stores/useVisitedStore";
 import { useCountryStore } from "../stores/useCountryStore";
+import Header from './ui/header'
 
 const WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
 const BASE_STYLE_URL = "https://demotiles.maplibre.org/style.json";
@@ -27,6 +28,7 @@ const MapPage = () => {
   const [visitedCodes, setVisitedCodes] = useState([]);
   const [visitedNames, setVisitedNames] = useState([]);
   const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
 
   const [markers, setMarkers] = useState([]);
 
@@ -154,6 +156,37 @@ const MapPage = () => {
     }
 
     setMarkers(newMarkers);
+  };
+
+  const countryOptions = useMemo(() => {
+    if (!query) return [];
+    const q = query.trim().toLowerCase();
+    if (!Array.isArray(countries)) return [];
+    return countries
+      .filter(c => (c.name || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [query, countries]);
+
+  const flyToCountryAndOpen = (countryRow) => {
+    const map = mapRef.current;
+    if (!map || !worldDataRef.current || !countryRow) return;
+    // Find feature by ISO3 or name
+    const iso3 = (countryRow.code || '').toUpperCase();
+    const feature = (worldDataRef.current.features || []).find((f) => {
+      const fcode = (f.id || f.properties?.iso_a3 || '').toString().toUpperCase();
+      const fname = (f.properties?.name || f.properties?.ADMIN || '').toString();
+      return (iso3 && fcode === iso3) || fname === countryRow.name;
+    });
+    if (!feature) return;
+    const bbox = turf.bbox(feature);
+    map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 50, maxZoom: 5 });
+    setSelectedCountryName(countryRow.name);
+    setSelectedCountryCode3(iso3);
+    setSelectedCountryCode2("");
+    setSelectedCountry(countryRow);
+    setShowForm(true);
+    setFormSuccess(false);
+    setQuery("");
   };
 
   useEffect(() => {
@@ -415,12 +448,37 @@ const MapPage = () => {
 
   return (
     <div className="relative w-screen h-screen">
+      <Header>
+        <div className="relative w-full max-w-md">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search countries..."
+            className="w-full px-4 py-2 rounded-md bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+          />
+          {query && countryOptions.length > 0 && (
+            <div className="absolute mt-2 w-full rounded-md bg-black/80 text-white border border-white/10 max-h-64 overflow-auto z-50">
+              {countryOptions.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => flyToCountryAndOpen(c)}
+                  className="block w-full text-left px-4 py-2 hover:bg-white/10"
+                >
+                  <span className="font-medium">{c.name}</span>
+                  <span className="opacity-60 ml-2 text-xs">{c.code}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Header>
+
       <div ref={mapContainerRef} className="absolute inset-0" />
       {hoveredCountryName && !showForm && (
-        <div className="absolute left-3 top-3 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
+        <div className="absolute left-3 top-20 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
       )}
       {notice && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md bg-black/70 text-white text-sm shadow">
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md bg-black/70 text-white text-sm shadow">
           {notice}
         </div>
       )}
