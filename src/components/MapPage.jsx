@@ -4,7 +4,7 @@ import * as turf from "@turf/turf";
 import "maplibre-gl/dist/maplibre-gl.css";
 import MemoryForm from "./MemoryForm";
 import { UserAuth } from "../context/AuthContext";
-import { addMemory, getMemoryCountsByCountry } from "../services/memories";
+import { addMemory, getMemoryCountsByCountry, getRecentMemories, addCountry } from "../services/memories";
 import { useVisitedStore } from "../stores/useVisitedStore";
 import { useCountryStore } from "../stores/useCountryStore";
 import Header from './ui/header'
@@ -29,12 +29,13 @@ const MapPage = () => {
   const [visitedNames, setVisitedNames] = useState([]);
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
+  const [recentMemories, setRecentMemories] = useState([]);
 
   const [markers, setMarkers] = useState([]);
 
   const { session } = UserAuth();
   const { visited, loadVisited, markVisited } = useVisitedStore();
-  const { countries, fetchCountries } = useCountryStore();
+  const { countries, fetchCountries, testConnection } = useCountryStore();
 
   const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
   const tagVisited = (fc, codes, names) => {
@@ -57,43 +58,206 @@ const MapPage = () => {
   };
 
   const resolveCountryRow = (featureName, code3, code2) => {
-    if (!Array.isArray(countries)) return null;
+    console.log(`Resolving country: ${featureName}, code3: ${code3}, code2: ${code2}`);
+    if (!Array.isArray(countries)) {
+      console.log('No countries array available');
+      return null;
+    }
     const upper = (s) => (s || "").toUpperCase();
     const norm = normalize;
 
+    // First try by codes
     if (code2) {
       const row2 = countries.find((c) => upper(c.code) === upper(code2));
-      if (row2) return row2;
+      if (row2) {
+        console.log(`Found by code2: ${row2.name}`);
+        return row2;
+      }
     }
     if (code3) {
       const row3 = countries.find((c) => upper(c.code) === upper(code3));
-      if (row3) return row3;
+      if (row3) {
+        console.log(`Found by code3: ${row3.name}`);
+        return row3;
+      }
     }
+
+    // Then try by exact name match
     const nFeature = norm(featureName);
     let best = countries.find((c) => {
       const nDb = norm(c.name);
-      return nDb === nFeature || nDb.includes(nFeature) || nFeature.includes(nDb);
+      return nDb === nFeature;
     });
-    if (best) return best;
+    if (best) {
+      console.log(`Found by exact name match: ${best.name}`);
+      return best;
+    }
 
+    // Then try by partial name match
+    best = countries.find((c) => {
+      const nDb = norm(c.name);
+      return nDb.includes(nFeature) || nFeature.includes(nDb);
+    });
+    if (best) {
+      console.log(`Found by partial name match: ${best.name}`);
+      return best;
+    }
+
+    // Try with synonyms
     const synonyms = new Map([
+      // United States variations
       ["unitedstatesofamerica", "unitedstates"],
+      ["unitedstates", "unitedstatesofamerica"],
+      ["usa", "unitedstates"],
+      
+      // United Kingdom variations
+      ["unitedkingdom", "greatbritain"],
+      ["greatbritain", "unitedkingdom"],
+      ["uk", "unitedkingdom"],
+      ["britain", "unitedkingdom"],
+      
+      // Russia variations
       ["russianfederation", "russia"],
+      ["russia", "russianfederation"],
+      
+      // Korea variations
       ["korearepublicof", "southkorea"],
       ["koreademocraticpeoplesrepublicof", "northkorea"],
+      ["southkorea", "korearepublicof"],
+      ["northkorea", "koreademocraticpeoplesrepublicof"],
+      
+      // Ireland variations
       ["irishrepublic", "ireland"],
+      ["ireland", "irishrepublic"],
+      
+      // Syria variations
       ["syrianarabrepublic", "syria"],
+      ["syria", "syrianarabrepublic"],
+      
+      // Moldova variations
       ["moldovarepublicof", "moldova"],
+      ["moldova", "moldovarepublicof"],
+      
+      // Tanzania variations
       ["tanzaniatheunitedrepublicof", "tanzania"],
+      ["tanzania", "tanzaniatheunitedrepublicof"],
+      
+      // Bolivia variations
       ["boliviaplurinationalstateof", "bolivia"],
+      ["bolivia", "boliviaplurinationalstateof"],
+      
+      // Iran variations
       ["iranislamicrepublicof", "iran"],
+      ["iran", "iranislamicrepublicof"],
+      
+      // Laos variations
       ["laopeoplesdemocraticrepublic", "laos"],
+      ["laos", "laopeoplesdemocraticrepublic"],
+      
+      // Myanmar variations
       ["myanmarburma", "myanmar"],
+      ["myanmar", "myanmarburma"],
+      ["burma", "myanmar"],
+      
+      // Czech Republic variations
+      ["czechrepublic", "czechia"],
+      ["czechia", "czechrepublic"],
+      
+      // Slovakia variations
+      ["slovakrepublic", "slovakia"],
+      ["slovakia", "slovakrepublic"],
+      
+      // Additional common variations
+      ["france", "frenchrepublic"],
+      ["frenchrepublic", "france"],
+      ["germany", "federalrepublicofgermany"],
+      ["federalrepublicofgermany", "germany"],
+      ["italy", "italianrepublic"],
+      ["italianrepublic", "italy"],
+      ["spain", "kingdomofspain"],
+      ["kingdomofspain", "spain"],
+      ["poland", "republicofpoland"],
+      ["republicofpoland", "poland"],
+      ["lithuania", "republicoflithuania"],
+      ["republicoflithuania", "lithuania"],
+      ["latvia", "republicoflatvia"],
+      ["republicoflatvia", "latvia"],
+      ["estonia", "republicofestonia"],
+      ["republicofestonia", "estonia"],
+      ["finland", "republicoffinland"],
+      ["republicoffinland", "finland"],
+      ["sweden", "kingdomofsweden"],
+      ["kingdomofsweden", "sweden"],
+      ["norway", "kingdomofnorway"],
+      ["kingdomofnorway", "norway"],
+      ["denmark", "kingdomofdenmark"],
+      ["kingdomofdenmark", "denmark"],
+      ["netherlands", "kingdomofthenetherlands"],
+      ["kingdomofthenetherlands", "netherlands"],
+      ["portugal", "portugueserepublic"],
+      ["portugueserepublic", "portugal"],
+      ["greece", "hellenicrepublic"],
+      ["hellenicrepublic", "greece"],
+      ["austria", "republicofaustria"],
+      ["republicofaustria", "austria"],
+      ["switzerland", "swissconfederation"],
+      ["swissconfederation", "switzerland"],
+      ["belgium", "kingdomofbelgium"],
+      ["kingdomofbelgium", "belgium"],
+      ["luxembourg", "grandduchyofluxembourg"],
+      ["grandduchyofluxembourg", "luxembourg"],
     ]);
+    
     const mapped = synonyms.get(nFeature) || nFeature;
     best = countries.find((c) => norm(c.name) === mapped);
-    if (best) return best;
+    if (best) {
+      console.log(`Found by synonym: ${best.name}`);
+      return best;
+    }
 
+    // Try fuzzy matching - look for countries that contain any part of the feature name
+    best = countries.find((c) => {
+      const nDb = norm(c.name);
+      const words = nFeature.split(/(?=[A-Z])|[\s-]+/).filter(w => w.length > 2);
+      return words.some(word => nDb.includes(word)) || nFeature.split(' ').some(word => nDb.includes(norm(word)));
+    });
+    if (best) {
+      console.log(`Found by fuzzy match: ${best.name}`);
+      return best;
+    }
+
+    // Try reverse fuzzy matching - look for feature names that contain parts of country names
+    best = countries.find((c) => {
+      const nDb = norm(c.name);
+      const dbWords = nDb.split(/[\s-]+/).filter(w => w.length > 2);
+      return dbWords.some(word => nFeature.includes(word));
+    });
+    if (best) {
+      console.log(`Found by reverse fuzzy match: ${best.name}`);
+      return best;
+    }
+
+    // Try partial word matching
+    best = countries.find((c) => {
+      const nDb = norm(c.name);
+      const featureWords = nFeature.split(/[\s-]+/).filter(w => w.length > 2);
+      const dbWords = nDb.split(/[\s-]+/).filter(w => w.length > 2);
+      
+      // Check if any word from feature matches any word from country
+      return featureWords.some(fWord => 
+        dbWords.some(dWord => 
+          fWord.includes(dWord) || dWord.includes(fWord) || 
+          fWord.substring(0, 3) === dWord.substring(0, 3) // First 3 chars match
+        )
+      );
+    });
+    if (best) {
+      console.log(`Found by partial word match: ${best.name}`);
+      return best;
+    }
+
+    // If not found in database, return null
+    console.log(`Country not in database: ${featureName}`);
     return null;
   };
 
@@ -107,15 +271,45 @@ const MapPage = () => {
     setTimeout(() => setNotice(""), 1800);
   };
 
+  const loadRecentMemories = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      const { data, error } = await getRecentMemories(session.user.id, 5);
+      if (error) {
+        console.error('Error fetching recent memories:', error);
+        return;
+      }
+      setRecentMemories(data || []);
+    } catch (err) {
+      console.error('Error loading recent memories:', err);
+    }
+  };
+
   const renderMemoryMarkers = async () => {
     const map = mapRef.current;
     if (!map || !worldDataRef.current || !session?.user?.id) return;
 
-    const { data } = await getMemoryCountsByCountry(session.user.id);
-    if (!countries || countries.length === 0) return;
+    console.log('Rendering memory markers...');
+    const { data, error } = await getMemoryCountsByCountry(session.user.id);
+    if (error) {
+      console.error('Error fetching memory counts:', error);
+      return;
+    }
+    
+    console.log('Memory counts data:', data);
+    if (!countries || countries.length === 0) {
+      console.log('No countries loaded yet');
+      return;
+    }
 
+    console.log('Available countries for mapping:', countries.map(c => ({ id: c.id, name: c.name, code: c.code })));
+    
     const idToCode = new Map(countries.map((c) => [c.id, (c.code || '').toUpperCase()]));
     const idToName = new Map(countries.map((c) => [c.id, c.name]));
+    
+    console.log('ID to Code mapping:', Array.from(idToCode.entries()));
+    console.log('ID to Name mapping:', Array.from(idToName.entries()));
 
     clearMarkers();
     const newMarkers = [];
@@ -123,19 +317,74 @@ const MapPage = () => {
     for (const row of (data || [])) {
       const countryId = row.country_id;
       const count = Number(row.count) || 0;
-      if (!countryId || count <= 0) continue;
+      console.log(`Processing memory row: country_id=${countryId}, count=${count}`);
+      
+      if (!countryId || count <= 0) {
+        console.log(`Skipping row: invalid countryId or count`);
+        continue;
+      }
 
       const code = (idToCode.get(countryId) || '').toUpperCase();
       const dbName = idToName.get(countryId) || '';
       const normDbName = normalize(dbName);
 
+      console.log(`Looking for country: ${dbName} (${code}) for country_id: ${countryId}`);
+
       const feature = (worldDataRef.current.features || []).find((f) => {
         const iso3 = (f.id || f.properties?.iso_a3 || '').toString().toUpperCase();
         const name = f.properties?.name || f.properties?.ADMIN || f.properties?.admin || '';
         const normName = normalize(name);
-        return (code && iso3 === code) || (normDbName && (normName === normDbName || normName.includes(normDbName) || normDbName.includes(normName)));
+        
+        // Debug logging for Russia specifically
+        if (dbName.toLowerCase().includes('russia') || name.toLowerCase().includes('russia')) {
+          console.log(`Russia debug - DB: ${dbName} (${code}), GeoJSON: ${name} (${iso3})`);
+          console.log(`Russia debug - Normalized DB: ${normDbName}, Normalized GeoJSON: ${normName}`);
+        }
+        
+        // Try by code first
+        if (code && iso3 === code) {
+          if (dbName.toLowerCase().includes('russia') || name.toLowerCase().includes('russia')) {
+            console.log(`Russia found by code match: ${code} === ${iso3}`);
+          }
+          return true;
+        }
+        
+        // Try by name matching
+        if (normDbName && normName) {
+          // Exact match
+          if (normName === normDbName) {
+            if (dbName.toLowerCase().includes('russia') || name.toLowerCase().includes('russia')) {
+              console.log(`Russia found by exact name match: ${normName} === ${normDbName}`);
+            }
+            return true;
+          }
+          // Partial match
+          if (normName.includes(normDbName) || normDbName.includes(normName)) {
+            if (dbName.toLowerCase().includes('russia') || name.toLowerCase().includes('russia')) {
+              console.log(`Russia found by partial match: ${normName} includes ${normDbName} or vice versa`);
+            }
+            return true;
+          }
+          // Word-based matching
+          const dbWords = normDbName.split(/[\s-]+/).filter(w => w.length > 2);
+          const nameWords = normName.split(/[\s-]+/).filter(w => w.length > 2);
+          if (dbWords.some(word => nameWords.includes(word)) || nameWords.some(word => dbWords.includes(word))) {
+            if (dbName.toLowerCase().includes('russia') || name.toLowerCase().includes('russia')) {
+              console.log(`Russia found by word match: ${dbWords} vs ${nameWords}`);
+            }
+            return true;
+          }
+        }
+        
+        return false;
       });
-      if (!feature) continue;
+      
+      if (!feature) {
+        console.log(`Feature not found for ${dbName} (${code})`);
+        continue;
+      }
+
+      console.log(`Found feature for ${dbName}, creating marker`);
 
       const point = turf.pointOnFeature(feature).geometry.coordinates;
       const el = document.createElement('div');
@@ -149,6 +398,7 @@ const MapPage = () => {
       newMarkers.push(marker);
     }
 
+    console.log(`Created ${newMarkers.length} memory markers`);
     setMarkers(newMarkers);
   };
 
@@ -184,16 +434,39 @@ const MapPage = () => {
   };
 
   useEffect(() => {
+    console.log('MapPage: Initializing...');
+    
+    // Test connection first
+    testConnection?.().then(result => {
+      console.log('Connection test result:', result);
+    });
+    
     fetchCountries?.();
     if (session?.user?.id) loadVisited?.(session.user.id);
-  }, [session?.user?.id, fetchCountries, loadVisited]);
+  }, [session?.user?.id, fetchCountries, loadVisited, testConnection]);
+
+  // Debug countries loading
+  useEffect(() => {
+    console.log('MapPage: Countries updated:', countries?.length || 0);
+    if (countries && countries.length > 0) {
+      console.log('Sample countries:', countries.slice(0, 3));
+      console.log('All country names:', countries.map(c => c.name).sort());
+    }
+  }, [countries]);
 
   useEffect(() => {
     if (!Array.isArray(visited) || !Array.isArray(countries)) return;
+    console.log('Processing visited countries:', visited);
+    console.log('Available countries:', countries.length);
+    
     const idToCode = new Map(countries.map((c) => [c.id, c.code]));
     const idToName = new Map(countries.map((c) => [c.id, c.name]));
     const codes = visited.map((v) => idToCode.get(v.country_id)).filter(Boolean);
     const names = visited.map((v) => idToName.get(v.country_id)).filter(Boolean);
+    
+    console.log('Visited codes:', codes);
+    console.log('Visited names:', names);
+    
     setVisitedCodes(codes);
     setVisitedNames(names);
   }, [visited, countries]);
@@ -240,7 +513,19 @@ const MapPage = () => {
         const res = await fetch(WORLD_GEOJSON_URL);
         const baseData = await res.json();
         worldDataRef.current = baseData;
+        
+        // Debug: Log some sample countries from GeoJSON
+        console.log('GeoJSON countries sample:', baseData.features?.slice(0, 5).map(f => ({
+          name: f.properties?.name || f.properties?.ADMIN,
+          iso3: f.id || f.properties?.iso_a3,
+          iso2: f.properties?.iso_a2
+        })));
+        
+        // Debug: Log all GeoJSON country names
+        const geoJsonNames = baseData.features?.map(f => f.properties?.name || f.properties?.ADMIN).filter(Boolean).sort();
+        console.log('All GeoJSON country names:', geoJsonNames);
       } catch (e) {
+        console.error('Failed to load GeoJSON:', e);
         return;
       }
 
@@ -382,6 +667,7 @@ const MapPage = () => {
 
   useEffect(() => {
     renderMemoryMarkers();
+    loadRecentMemories();
     return () => clearMarkers();
   }, [session?.user?.id, countries]);
 
@@ -401,7 +687,7 @@ const MapPage = () => {
       }
 
       if (!countryRow) {
-        showNotice("Could not resolve selected country. Please try again.");
+        showNotice(`Country "${selectedCountryName}" is not available in your countries list. Please add it to the database first.`);
         return;
       }
 
@@ -421,6 +707,7 @@ const MapPage = () => {
       setVisitedNames((prev) => (prev?.includes(countryRow.name) ? prev : [...prev, countryRow.name]));
 
       await renderMemoryMarkers();
+      await loadRecentMemories();
 
       setFormSuccess(true);
       setTimeout(() => {
@@ -470,6 +757,43 @@ const MapPage = () => {
       )}
       {showForm && (
         <MemoryForm countryName={selectedCountryName} onClose={() => setShowForm(false)} onSubmit={handleSubmitMemory} success={formSuccess} />
+      )}
+      
+      {/* Recent Memories Carousel */}
+      {recentMemories.length > 0 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-4xl px-4">
+          <div className="bg-black/80 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+            <h3 className="text-white text-sm font-semibold mb-3 flex items-center justify-center">
+              <span className="w-2 h-2 bg-cyan-400 rounded-full mr-2"></span>
+              Recent Memories
+            </h3>
+            <div className="flex gap-3 justify-center flex-wrap">
+              {recentMemories.slice(0, 5).map((memory, index) => (
+                <div
+                  key={memory.id || index}
+                  className="bg-white/10 rounded-lg p-3 w-[200px] border border-white/20 hover:bg-white/20 transition-colors cursor-pointer"
+                  onClick={() => {
+                    // Find the country and fly to it
+                    const country = countries?.find(c => c.id === memory.country_id);
+                    if (country) {
+                      flyToCountryAndOpen(country);
+                    }
+                  }}
+                >
+                  <div className="text-white text-sm font-medium truncate">
+                    {memory.title}
+                  </div>
+                  <div className="text-white/70 text-xs mt-1 truncate">
+                    {memory.country_name || 'Unknown Country'}
+                  </div>
+                  <div className="text-white/50 text-xs mt-1">
+                    {memory.memory_date ? new Date(memory.memory_date).toLocaleDateString() : 'No date'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

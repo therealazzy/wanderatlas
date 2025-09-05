@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { Home, User } from 'lucide-react'
+import { Home, User, Map } from 'lucide-react'
 import { UserAuth } from '../../context/AuthContext'
 
 const Header = ({ children }) => {
@@ -18,9 +18,14 @@ const Header = ({ children }) => {
       </div>
       <div className="flex items-center gap-3">
         {session && (
-          <Link to="/profile" className="text-white hover:text-blue-300">
-            <User size={24} />
-          </Link>
+          <>
+            <Link to="/map" className="text-white hover:text-blue-300" title="Map">
+              <Map size={24} />
+            </Link>
+            <Link to="/profile" className="text-white hover:text-blue-300" title="Profile">
+              <User size={24} />
+            </Link>
+          </>
         )}
       </div>
     </header>
