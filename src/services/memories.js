@@ -55,7 +55,13 @@ export const getRecentMemories = async (userId, limit = 5) => {
     .select(`
       id,
       title,
+      description,
       memory_date,
+      location,
+      photos,
+      rating,
+      tags,
+      is_public,
       country_id,
       countries!inner(name)
     `)

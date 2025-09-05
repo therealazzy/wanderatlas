@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import * as turf from "@turf/turf";
 import "maplibre-gl/dist/maplibre-gl.css";
 import MemoryForm from "./MemoryForm";
+import MemoryViewModal from "./MemoryViewModal";
 import { UserAuth } from "../context/AuthContext";
 import { addMemory, getMemoryCountsByCountry, getRecentMemories, addCountry } from "../services/memories";
 import { useVisitedStore } from "../stores/useVisitedStore";
@@ -30,6 +31,7 @@ const MapPage = () => {
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [recentMemories, setRecentMemories] = useState([]);
+  const [selectedMemory, setSelectedMemory] = useState(null);
 
   const [markers, setMarkers] = useState([]);
 
@@ -720,7 +722,7 @@ const MapPage = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen">
+    <div className="relative w-screen h-screen flex flex-col">
       <Header>
         <div className="relative w-full max-w-md">
           <input
@@ -746,7 +748,7 @@ const MapPage = () => {
         </div>
       </Header>
 
-      <div ref={mapContainerRef} className="absolute inset-0" />
+      <div ref={mapContainerRef} className="flex-1" />
       {hoveredCountryName && !showForm && (
         <div className="absolute left-3 top-20 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
       )}
@@ -757,6 +759,10 @@ const MapPage = () => {
       )}
       {showForm && (
         <MemoryForm countryName={selectedCountryName} onClose={() => setShowForm(false)} onSubmit={handleSubmitMemory} success={formSuccess} />
+      )}
+      
+      {selectedMemory && (
+        <MemoryViewModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
       )}
       
       {/* Recent Memories Carousel */}
@@ -772,13 +778,7 @@ const MapPage = () => {
                 <div
                   key={memory.id || index}
                   className="bg-white/10 rounded-lg p-3 w-[200px] border border-white/20 hover:bg-white/20 transition-colors cursor-pointer"
-                  onClick={() => {
-                    // Find the country and fly to it
-                    const country = countries?.find(c => c.id === memory.country_id);
-                    if (country) {
-                      flyToCountryAndOpen(country);
-                    }
-                  }}
+                  onClick={() => setSelectedMemory(memory)}
                 >
                   <div className="text-white text-sm font-medium truncate">
                     {memory.title}
