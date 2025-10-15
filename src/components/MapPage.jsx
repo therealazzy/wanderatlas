@@ -724,12 +724,12 @@ const MapPage = () => {
   return (
     <div className="relative w-screen h-screen flex flex-col">
       <Header>
-        <div className="relative w-full max-w-md">
+        <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search countries..."
-            className="w-full px-4 py-2 rounded-md bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+            className="w-full px-3 py-1.5 sm:px-4 sm:py-2 rounded-md bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 text-sm sm:text-base"
           />
           {query && countryOptions.length > 0 && (
             <div className="absolute mt-2 w-full rounded-md bg-black/80 text-white border border-white/10 max-h-64 overflow-auto z-50">
@@ -737,7 +737,7 @@ const MapPage = () => {
                 <button
                   key={c.id}
                   onClick={() => flyToCountryAndOpen(c)}
-                  className="block w-full text-left px-4 py-2 hover:bg-white/10"
+                  className="block w-full text-left px-3 py-2 hover:bg-white/10 text-sm sm:text-base"
                 >
                   <span className="font-medium">{c.name}</span>
                   <span className="opacity-60 ml-2 text-xs">{c.code}</span>
@@ -750,10 +750,10 @@ const MapPage = () => {
 
       <div ref={mapContainerRef} className="flex-1" />
       {hoveredCountryName && !showForm && (
-        <div className="absolute left-3 top-20 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
+        <div className="absolute left-3 top-16 sm:top-20 z-40 rounded bg-black/70 text-white px-3 py-1 text-sm">{hoveredCountryName}</div>
       )}
       {notice && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md bg-black/70 text-white text-sm shadow">
+        <div className="absolute top-20 sm:top-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md bg-black/70 text-white text-sm shadow">
           {notice}
         </div>
       )}
@@ -767,20 +767,20 @@ const MapPage = () => {
       
       {/* Recent Memories Carousel */}
       {recentMemories.length > 0 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-4xl px-4">
-          <div className="bg-black/80 backdrop-blur-sm rounded-lg p-4 border border-white/10">
-            <h3 className="text-white text-sm font-semibold mb-3 flex items-center justify-center">
-              <span className="w-2 h-2 bg-cyan-400 rounded-full mr-2"></span>
+        <div className="absolute bottom-2 md:bottom-4 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-xs sm:max-w-md md:max-w-4xl px-2 md:px-4">
+          <div className="bg-black/80 backdrop-blur-sm rounded-lg p-2 md:p-4 border border-white/10">
+            <h3 className="text-white text-xs md:text-sm font-semibold mb-2 md:mb-3 flex items-center justify-center">
+              <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-cyan-400 rounded-full mr-1 md:mr-2"></span>
               Recent Memories
             </h3>
-            <div className="flex gap-3 justify-center flex-wrap">
+            <div className="flex gap-1.5 md:gap-3 overflow-x-auto pb-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {recentMemories.slice(0, 5).map((memory, index) => (
                 <div
                   key={memory.id || index}
-                  className="bg-white/10 rounded-lg p-3 w-[200px] border border-white/20 hover:bg-white/20 transition-colors cursor-pointer"
+                  className="bg-white/10 rounded-lg p-2 md:p-3 w-[120px] sm:w-[150px] md:w-[200px] border border-white/20 hover:bg-white/20 transition-colors cursor-pointer flex-shrink-0"
                   onClick={() => setSelectedMemory(memory)}
                 >
-                  <div className="text-white text-sm font-medium truncate">
+                  <div className="text-white text-xs md:text-sm font-medium truncate">
                     {memory.title}
                   </div>
                   <div className="text-white/70 text-xs mt-1 truncate">
