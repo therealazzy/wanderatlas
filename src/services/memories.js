@@ -78,4 +78,34 @@ export const getRecentMemories = async (userId, limit = 5) => {
   }));
 
   return { data: transformedData, error: null };
+};
+
+export const getAllMemories = async (userId) => {
+  const { data, error } = await supabase
+    .from('memories')
+    .select(`
+      id,
+      title,
+      description,
+      memory_date,
+      location,
+      photos,
+      rating,
+      tags,
+      is_public,
+      country_id,
+      countries!inner(name)
+    `)
+    .eq('user_id', userId)
+    .order('memory_date', { ascending: false });
+
+  if (error) return { data: null, error };
+
+  // Transform the data to include country name
+  const transformedData = (data || []).map(memory => ({
+    ...memory,
+    country_name: memory.countries?.name || 'Unknown Country'
+  }));
+
+  return { data: transformedData, error: null };
 }; 
